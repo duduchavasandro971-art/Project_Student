@@ -1,167 +1,190 @@
 
-class Student:
-    def __init__(self, name, roll_number, grade):
-        self.__name = name
-        self.__roll_number = roll_number
-        self.__grade = grade
-
-    # Getter მეთოდები
-    def get_name(self):
-        return self.__name
-
-    def get_roll_number(self):
-        return self.__roll_number
-
-    def get_grade(self):
-        return self.__grade
-
-    # შეფასების განახლება
-    def update_grade(self, new_grade):
-        self.__grade = new_grade
-
-    # სტუდენტის ინფორმაციის ჩვენება
-    def display_info(self):
-        print("-------------------------")
-        print(f"სახელი: {self.__name}")
-        print(f"სიის ნომერი: {self.__roll_number}")
-        print(f"შეფასება: {self.__grade}")
-        print("-------------------------")
+from models import Student
+from storage import StudentStorage, StorageError
+from validators import (
+    validate_grade,
+    validate_name,
+    validate_roll_number
+)
 
 
 class StudentManagementSystem:
+
     def __init__(self):
-        self.students = []
+        self.storage = StudentStorage()
+        self.students = self.storage.load_students()
 
-    # ახალი სტუდენტის დამატება
-    def add_student(self):
-        name = input("შეიყვანეთ სტუდენტის სახელი: ").strip()
+    def save(self):
+        self.storage.save_students(self.students)
 
-        if not name:
-            print("შეცდომა! სახელი არ უნდა იყოს ცარიელი.")
-            return
-
-        try:
-            roll_number = int(input("შეიყვანეთ სიის ნომერი: "))
-
-            if roll_number <= 0:
-                print("შეცდომა! ნომერი უნდა იყოს დადებითი.")
-                return
-
-        except ValueError:
-            print("შეცდომა! ნომერი უნდა იყოს მთელი რიცხვი.")
-            return
-
-        # ნომრის უნიკალურობის შემოწმება
-        if self.find_student(roll_number):
-            print("ასეთი ნომრის მქონე სტუდენტი უკვე არსებობს!")
-            return
-
-        grade = input("შეიყვანეთ შეფასება (A-F): ").strip().upper()
-
-        if grade not in ["A", "B", "C", "D", "E", "F"]:
-            print("შეცდომა! შეფასება უნდა იყოს A, B, C, D, E ან F.")
-            return
-
-        student = Student(name, roll_number, grade)
-        self.students.append(student)
-
-        print("სტუდენტი წარმატებით დაემატა!")
-
-    # ყველა სტუდენტის ჩვენება
-    def display_all_students(self):
-        if not self.students:
-            print("სტუდენტების სია ცარიელია.")
-            return
-
-        print("\n===== ყველა სტუდენტი =====")
-
-        for student in self.students:
-            student.display_info()
-
-    # სტუდენტის ძებნა ნომრით
+    # სტუდენტის ძებნა
     def find_student(self, roll_number):
+
         for student in self.students:
-            if student.get_roll_number() == roll_number:
+            if student.roll_number == roll_number:
                 return student
 
         return None
 
-    def search_student(self):
+    # ახალი სტუდენტის დამატება
+    @validate_grade
+    def add_student(self, name, roll_number, grade):
+
+        name = validate_name(name)
+        roll_number = validate_roll_number(roll_number)
+
+        if self.find_student(roll_number):
+            raise ValueError("ეს სიის ნომერი უკვე გამოყენებულია!")
+
+        student = Student(name, roll_number, grade)
+
+        self.students.append(student)
+
         try:
-            roll_number = int(input("შეიყვანეთ სტუდენტის სიის ნომერი: "))
+            self.save()
+        except StorageError:
+            self.students.remove(student)
+            raise
 
-            student = self.find_student(roll_number)
+        print("\nსტუდენტი წარმატებით დაემატა!")
 
-            if student:
-                print("\nსტუდენტი მოიძებნა!")
-                student.display_info()
-            else:
-                print("სტუდენტი ვერ მოიძებნა.")
+    # ყველა სტუდენტის ნახვა
+    def show_all_students(self):
 
-        except ValueError:
-            print("შეცდომა! შეიყვანეთ სწორი მთელი რიცხვი.")
+        if not self.students:
+            print("\nსტუდენტების სია ცარიელია!")
+            return
+
+        print("\n========== სტუდენტების სია ==========")
+
+        for index, student in enumerate(self.students, start=1):
+            print(f"{index}. {student}")
+
+        print("=====================================")
+
+    # სტუდენტის ძებნა ნომრით
+    def search_student(self, roll_number):
+
+        roll_number = validate_roll_number(roll_number)
+        student = self.find_student(roll_number)
+
+        if student:
+            print("\nსტუდენტი მოიძებნა:")
+            print(student.get_info())
+        else:
+            print("\nსტუდენტი ვერ მოიძებნა!")
 
     # შეფასების განახლება
-    def update_student_grade(self):
+    @validate_grade
+    def update_grade(self, roll_number, grade):
+
+        roll_number = validate_roll_number(roll_number)
+        student = self.find_student(roll_number)
+
+        if not student:
+            print("\nსტუდენტი ვერ მოიძებნა!")
+            return
+
+        old_grade = student.grade
+        student.grade = grade
+
         try:
-            roll_number = int(
-                input("შეიყვანეთ სტუდენტის სიის ნომერი: ")
-            )
+            self.save()
+        except StorageError:
+            student.grade = old_grade
+            raise
 
-            student = self.find_student(roll_number)
+        print("\nშეფასება წარმატებით განახლდა!")
 
-            if student is None:
-                print("სტუდენტი ვერ მოიძებნა.")
-                return
+    # მენიუ
+    def display_menu(self):
 
-            new_grade = input(
-                "შეიყვანეთ ახალი შეფასება (A-F): "
-            ).strip().upper()
+        print("\n===================================")
+        print("      STUDENT MANAGEMENT SYSTEM")
+        print("===================================")
+        print("1. ახალი სტუდენტის დამატება")
+        print("2. ყველა სტუდენტის ნახვა")
+        print("3. სტუდენტის ძებნა ნომრით")
+        print("4. სტუდენტის შეფასების განახლება")
+        print("5. გასვლა")
+        print("===================================")
 
-            if new_grade not in ["A", "B", "C", "D", "E", "F"]:
-                print("არასწორი შეფასება!")
-                return
+    # პროგრამის გაშვება
+    def run(self):
 
-            student.update_grade(new_grade)
+        print("\nმოგესალმებით სტუდენტების მართვის სისტემაში!")
 
-            print("შეფასება წარმატებით განახლდა!")
-
-        except ValueError:
-            print("შეცდომა! შეიყვანეთ სწორი ნომერი.")
-
-    # მთავარი მენიუ
-    def menu(self):
         while True:
-            print("\n===== სტუდენტების მართვის სისტემა =====")
-            print("1. ახალი სტუდენტის დამატება")
-            print("2. ყველა სტუდენტის ნახვა")
-            print("3. სტუდენტის ძებნა ნომრის მიხედვით")
-            print("4. სტუდენტის შეფასების განახლება")
-            print("5. გასვლა")
 
-            choice = input("აირჩიეთ მოქმედება (1-5): ")
+            self.display_menu()
 
-            if choice == "1":
-                self.add_student()
+            choice = input("აირჩიეთ ოპერაცია (1-5): ").strip()
 
-            elif choice == "2":
-                self.display_all_students()
+            try:
 
-            elif choice == "3":
-                self.search_student()
+                if choice == "1":
 
-            elif choice == "4":
-                self.update_student_grade()
+                    print("\n--- ახალი სტუდენტი ---")
 
-            elif choice == "5":
-                print("პროგრამა დასრულდა. ნახვამდის!")
+                    name = input("სახელი: ")
+                    roll_number = input("სიის ნომერი: ")
+                    grade = input("შეფასება (A-F): ")
+
+                    self.add_student(name, roll_number, grade)
+
+                elif choice == "2":
+
+                    self.show_all_students()
+
+                elif choice == "3":
+
+                    number = input("შეიყვანეთ სიის ნომერი: ")
+                    self.search_student(number)
+
+                elif choice == "4":
+
+                    number = input("შეიყვანეთ სიის ნომერი: ")
+                    grade = input("ახალი შეფასება (A-F): ")
+
+                    self.update_grade(number, grade)
+
+                elif choice == "5":
+
+                    print("\nპროგრამიდან გამოსვლა...")
+                    print("ნახვამდის!")
+                    break
+
+                else:
+
+                    print("\nარასწორი არჩევანი! აირჩიეთ 1-დან 5-მდე.")
+
+            except ValueError as error:
+
+                print(f"\nშეყვანის შეცდომა: {error}")
+
+            except StorageError as error:
+
+                print(f"\nფაილის შეცდომა: {error}")
+
+            except KeyboardInterrupt:
+
+                print("\nპროგრამა შეწყდა მომხმარებლის მიერ.")
                 break
 
-            else:
-                print("არასწორი არჩევანი! სცადეთ თავიდან.")
+            except Exception as error:
+
+                print(f"\nმოულოდნელი შეცდომა: {error}")
 
 
-# პროგრამის გაშვება
 if __name__ == "__main__":
-    system = StudentManagementSystem()
-    system.menu()
+
+    try:
+        app = StudentManagementSystem()
+        app.run()
+
+    except StorageError as error:
+        print(f"მონაცემების ჩატვირთვის შეცდომა: {error}")
+
+    except Exception as error:
+        print(f"პროგრამის გაშვების შეცდომა: {error}")
+
